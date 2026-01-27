@@ -4,8 +4,56 @@
     import Button from "$lib/components/ui/button/button.svelte";
     import { Input } from "$lib/components/ui/input";
     import { Label } from "$lib/components/ui/label";
+    import { goto } from "$app/navigation";
 
     let activeTab = $state("owner");
+    let loading = $state(false);
+    let error = $state("");
+
+    // Form Fields
+    let fullName = $state("");
+    let email = $state("");
+    let password = $state("");
+    let licenseId = $state("");
+
+    async function handleRegister() {
+        loading = true;
+        error = "";
+
+        // Map tab to backend role
+        let role = "OWNER";
+        if (activeTab === "contractor") role = "CONTRACTOR";
+        if (activeTab === "inspector") role = "INSPECTOR";
+
+        const payload = {
+            full_name: fullName,
+            email,
+            password,
+            role,
+            license_id: role === "INSPECTOR" ? licenseId : null,
+        };
+
+        try {
+            const res = await fetch("http://localhost:3000/auth/register", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.error || "Registration failed");
+            }
+
+            // Success
+            goto("/login");
+        } catch (err: any) {
+            error = err.message;
+        } finally {
+            loading = false;
+        }
+    }
 </script>
 
 <div
@@ -17,7 +65,7 @@
             <p class="text-muted-foreground">Select your role to get started</p>
         </div>
 
-        <Tabs.Root value="owner" class="w-full">
+        <Tabs.Root bind:value={activeTab} class="w-full">
             <Tabs.List class="grid w-full grid-cols-3">
                 <Tabs.Trigger value="owner">Owner/Buyer</Tabs.Trigger>
                 <Tabs.Trigger value="contractor">Contractor</Tabs.Trigger>
@@ -36,7 +84,11 @@
                     <Card.Content class="space-y-4">
                         <div class="space-y-2">
                             <Label for="name">Full Name</Label>
-                            <Input id="name" placeholder="John Doe" />
+                            <Input
+                                id="name"
+                                placeholder="John Doe"
+                                bind:value={fullName}
+                            />
                         </div>
                         <div class="space-y-2">
                             <Label for="email">Email</Label>
@@ -44,13 +96,27 @@
                                 id="email"
                                 type="email"
                                 placeholder="name@example.com"
+                                bind:value={email}
                             />
                         </div>
                         <div class="space-y-2">
                             <Label for="password">Password</Label>
-                            <Input id="password" type="password" />
+                            <Input
+                                id="password"
+                                type="password"
+                                bind:value={password}
+                            />
                         </div>
-                        <Button class="w-full">Create Account</Button>
+                        {#if error && activeTab === "owner"}
+                            <p class="text-sm text-destructive">{error}</p>
+                        {/if}
+                        <Button
+                            class="w-full"
+                            onclick={handleRegister}
+                            disabled={loading}
+                        >
+                            {loading ? "Creating Account..." : "Create Account"}
+                        </Button>
                     </Card.Content>
                 </Card.Root>
             </Tabs.Content>
@@ -69,6 +135,7 @@
                             <Input
                                 id="c-name"
                                 placeholder="Acme Construction"
+                                bind:value={fullName}
                             />
                         </div>
                         <div class="space-y-2">
@@ -77,13 +144,27 @@
                                 id="c-email"
                                 type="email"
                                 placeholder="name@example.com"
+                                bind:value={email}
                             />
                         </div>
                         <div class="space-y-2">
                             <Label for="c-password">Password</Label>
-                            <Input id="c-password" type="password" />
+                            <Input
+                                id="c-password"
+                                type="password"
+                                bind:value={password}
+                            />
                         </div>
-                        <Button class="w-full">Create Account</Button>
+                        {#if error && activeTab === "contractor"}
+                            <p class="text-sm text-destructive">{error}</p>
+                        {/if}
+                        <Button
+                            class="w-full"
+                            onclick={handleRegister}
+                            disabled={loading}
+                        >
+                            {loading ? "Creating Account..." : "Create Account"}
+                        </Button>
                     </Card.Content>
                 </Card.Root>
             </Tabs.Content>
@@ -99,7 +180,11 @@
                     <Card.Content class="space-y-4">
                         <div class="space-y-2">
                             <Label for="i-name">Full Name</Label>
-                            <Input id="i-name" placeholder="Jane Smith" />
+                            <Input
+                                id="i-name"
+                                placeholder="Jane Smith"
+                                bind:value={fullName}
+                            />
                         </div>
                         <div class="space-y-2">
                             <Label for="i-email">Email</Label>
@@ -107,11 +192,16 @@
                                 id="i-email"
                                 type="email"
                                 placeholder="name@example.com"
+                                bind:value={email}
                             />
                         </div>
                         <div class="space-y-2">
                             <Label for="i-password">Password</Label>
-                            <Input id="i-password" type="password" />
+                            <Input
+                                id="i-password"
+                                type="password"
+                                bind:value={password}
+                            />
                         </div>
                         <div class="space-y-2">
                             <Label for="i-credential"
@@ -120,12 +210,22 @@
                             <Input
                                 id="i-credential"
                                 placeholder="Lic-12345678"
+                                bind:value={licenseId}
                             />
                             <p class="text-[0.8rem] text-muted-foreground">
                                 Required to verify your inspector status.
                             </p>
                         </div>
-                        <Button class="w-full">Create Account</Button>
+                        {#if error && activeTab === "inspector"}
+                            <p class="text-sm text-destructive">{error}</p>
+                        {/if}
+                        <Button
+                            class="w-full"
+                            onclick={handleRegister}
+                            disabled={loading}
+                        >
+                            {loading ? "Creating Account..." : "Create Account"}
+                        </Button>
                     </Card.Content>
                 </Card.Root>
             </Tabs.Content>

@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
+    import { goto } from "$app/navigation";
     import { MockService } from "$lib/services/mockData";
     import type { Property } from "$lib/types";
     import * as Card from "$lib/components/ui/card";
@@ -18,6 +19,10 @@
         if (score > 70) return "destructive";
         if (score > 30) return "secondary";
         return "outline";
+    }
+
+    function navigateToProperty(id: string) {
+        goto(`/dashboard/property/${id}`);
     }
 </script>
 
@@ -63,7 +68,8 @@
             <Table.Body>
                 {#each properties as property}
                     <Table.Row
-                        class="h-20 hover:bg-muted/30 transition-colors border-b border-border/40 last:border-0"
+                        class="h-20 hover:bg-muted/30 transition-colors border-b border-border/40 last:border-0 cursor-pointer"
+                        onclick={() => navigateToProperty(property.id)}
                     >
                         <Table.Cell class="font-medium pl-6">
                             <div class="flex flex-col">
