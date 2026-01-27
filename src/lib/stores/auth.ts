@@ -1,36 +1,34 @@
 import { writable } from 'svelte/store';
-import type { User, UserRole } from '$lib/types';
 import { browser } from '$app/environment';
 
-const STORE_KEY = 'heart_user_token';
+export interface AuthUser {
+    id: string;
+    name: string;
+    role: string;
+}
+
+const STORE_KEY = 'heart_auth_user';
 
 // Initial state from localStorage if available
-const savedToken = browser ? localStorage.getItem(STORE_KEY) : null;
-let initialUser: User | null = null;
+let initialUser: AuthUser | null = null;
 
-if (savedToken) {
-    try {
-        initialUser = JSON.parse(atob(savedToken));
-    } catch (e) {
-        console.error('Failed to parse token', e);
-        if (browser) localStorage.removeItem(STORE_KEY);
+if (browser) {
+    const saved = localStorage.getItem(STORE_KEY);
+    if (saved) {
+        try {
+            initialUser = JSON.parse(saved);
+        } catch (e) {
+            console.error('Failed to restore auth session', e);
+            localStorage.removeItem(STORE_KEY);
+        }
     }
 }
 
-export const authStore = writable<User | null>(initialUser);
+export const authStore = writable<AuthUser | null>(initialUser);
 
-export const login = (role: UserRole, name: string) => {
-    // Mock token creation: Base64 encode the user object
-    const user: User = {
-        id: crypto.randomUUID(),
-        name,
-        role,
-        token: ''
-    };
-    user.token = btoa(JSON.stringify(user));
-
+export const login = (user: AuthUser) => {
     if (browser) {
-        localStorage.setItem(STORE_KEY, user.token);
+        localStorage.setItem(STORE_KEY, JSON.stringify(user));
     }
     authStore.set(user);
 };
