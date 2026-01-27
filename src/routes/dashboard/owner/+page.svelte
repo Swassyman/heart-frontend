@@ -6,11 +6,53 @@
     import Button from "$lib/components/ui/button/button.svelte";
     import { Badge } from "$lib/components/ui/badge";
     import { goto } from "$app/navigation";
+    import { authStore } from "$lib/stores/auth";
+    import { get } from "svelte/store";
 
     let properties: Property[] = $state([]);
 
     onMount(async () => {
-        properties = await MockService.getProperties("BUYER");
+        const user = get(authStore);
+        if (user && user.id) {
+            try {
+                const res = await fetch(
+                    `http://localhost:3000/user/${user.id}/properties`,
+                );
+                if (res.ok) {
+                    const data = await res.json();
+                    // Map backend keys to frontend model
+                    properties = data.map((p: any) => ({
+                        id: p.PROPERTY_ID || p.property_id,
+                        address: p.ADDRESS || p.address,
+                        owner: p.OWNER_NAME || "Unknown", // Assuming backend might not join Owner Name, or we use defaults
+                        ownerId: p.OWNER_ID || p.owner_id,
+                        riskScore: p.RISK_SCORE
+                            ? Math.round(p.RISK_SCORE * 100)
+                            : 0,
+                        imageUrl:
+                            "https://images.unsplash.com/photo-1568605114967-8130f3a36994?auto=format&fit=crop&w=800&q=80", // Fallback image
+                        description:
+                            p.DESCRIPTION ||
+                            p.description ||
+                            "No description available",
+                        // ... other fields if available
+                    }));
+                } else {
+                    console.error(
+                        "Failed to fetch properties:",
+                        await res.text(),
+                    );
+                    // Fallback to mock for demo if API fails/empty
+                    properties = await MockService.getProperties("BUYER");
+                }
+            } catch (err) {
+                console.error("Error fetching properties:", err);
+                // Fallback
+                properties = await MockService.getProperties("BUYER");
+            }
+        } else {
+            properties = await MockService.getProperties("BUYER");
+        }
     });
 
     function getRiskColor(score: number) {

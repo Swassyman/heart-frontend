@@ -19,7 +19,100 @@
     onMount(async () => {
         const id = $page.params.id;
         if (id) {
-            property = await MockService.getPropertyById(id);
+            // Fetch base mock data (until other endpoints are ready)
+            const mockProp = await MockService.getPropertyById(id);
+            if (!mockProp) {
+                // If mock fails, we can't do much (or we could fetch from backend property details if it existed)
+                // For now, assume mockProp is the base
+                return;
+            }
+
+            // 1. Fetch real defects from API
+            try {
+                const res = await fetch(
+                    `http://localhost:3000/property/${id}/defects`,
+                );
+                if (res.ok) {
+                    const defects = await res.json();
+
+                    // Map Snowflake uppercase keys to our frontend model
+                    mockProp.findings = defects.map((d: any) => ({
+                        id: d.FINDING_ID || d.finding_id,
+                        defectType: d.DEFECT_TYPE || d.defect_type,
+                        severity: d.SEVERITY || d.severity,
+                        roomId: d.OBSERVATION_ZONE || d.observation_zone,
+                        confidence: d.CONFIDENCE || d.confidence,
+                        observationText:
+                            d.OBSERVATION_TEXT || d.observation_text,
+                    }));
+                } else {
+                    console.error("Failed to fetch defects:", await res.text());
+                }
+            } catch (err) {
+                console.error("Error connecting to defects API:", err);
+            }
+
+            // 2. Fetch Risk Score
+            try {
+                const res = await fetch(
+                    `http://localhost:3000/property/${id}/risk-score`,
+                );
+                if (res.ok) {
+                    const riskData = await res.json();
+                    if (riskData) {
+                        const score =
+                            riskData.RISK_SCORE ?? riskData.risk_score;
+                        if (score !== undefined) {
+                            mockProp.riskScore = Math.round(score * 100);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error("Error fetching risk score:", err);
+            }
+
+            // 3. Fetch Room Alerts
+            if (mockProp.findings && mockProp.findings.length > 0) {
+                const uniqueRooms = [
+                    ...new Set(
+                        mockProp.findings.map((f) => f.roomId).filter(Boolean),
+                    ),
+                ];
+                const allAlerts = [];
+
+                for (const room of uniqueRooms) {
+                    try {
+                        const encodedRoom = encodeURIComponent(room);
+                        const res = await fetch(
+                            `http://localhost:3000/room/${encodedRoom}/alerts`,
+                        );
+                        if (res.ok) {
+                            const roomAlerts = await res.json();
+                            const mappedAlerts = roomAlerts.map((a: any) => ({
+                                id: a.ALERT_ID || a.alert_id,
+                                level: "ROOM",
+                                entityId: room,
+                                riskScore: a.RISK_SCORE || a.risk_score,
+                                type: a.ALERT_TYPE || a.alert_type,
+                                message: a.ALERT_MESSAGE || a.alert_message,
+                                createdAt: a.CREATED_AT || a.created_at,
+                            }));
+                            allAlerts.push(...mappedAlerts);
+                        }
+                    } catch (err) {
+                        console.error(
+                            `Error fetching alerts for room ${room}:`,
+                            err,
+                        );
+                    }
+                }
+
+                if (allAlerts.length > 0) {
+                    mockProp.alerts = allAlerts;
+                }
+            }
+
+            property = mockProp;
         }
         loading = false;
     });

@@ -6,11 +6,56 @@
     import * as Card from "$lib/components/ui/card";
     import * as Table from "$lib/components/ui/table";
     import { Badge } from "$lib/components/ui/badge";
+    import { authStore } from "$lib/stores/auth";
+    import { get } from "svelte/store";
 
     let properties: Property[] = $state([]);
 
     onMount(async () => {
-        properties = await MockService.getProperties("BUILDER"); // Builder = Contractor view roughly
+        const user = get(authStore);
+        if (user && user.id) {
+            try {
+                const res = await fetch(
+                    `http://localhost:3000/user/${user.id}/properties`,
+                );
+                if (res.ok) {
+                    const data = await res.json();
+                    properties = data.map((p: any) => ({
+                        id: p.PROPERTY_ID || p.property_id,
+                        address: p.ADDRESS || p.address,
+                        owner: p.OWNER_NAME || "Unknown",
+                        ownerId: p.OWNER_ID || p.owner_id,
+                        riskScore: p.RISK_SCORE
+                            ? Math.round(p.RISK_SCORE * 100)
+                            : 0,
+                        imageUrl:
+                            "https://images.unsplash.com/photo-1570129477492-45c003edd2be?auto=format&fit=crop&w=800&q=80",
+                        description:
+                            p.DESCRIPTION ||
+                            p.description ||
+                            "No description available",
+                        technicalDetails: {
+                            // Mock technical details if not in DB flat table
+                            roof: "Standard",
+                            foundation: "Standard",
+                            electrical: "Standard",
+                            plumbing: "Standard",
+                        },
+                    }));
+                } else {
+                    console.error(
+                        "Failed to fetch properties:",
+                        await res.text(),
+                    );
+                    properties = await MockService.getProperties("BUILDER");
+                }
+            } catch (err) {
+                console.error("Error fetching properties:", err);
+                properties = await MockService.getProperties("BUILDER");
+            }
+        } else {
+            properties = await MockService.getProperties("BUILDER");
+        }
     });
 
     function getRiskVariant(
