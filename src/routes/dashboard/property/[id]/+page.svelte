@@ -293,10 +293,28 @@
                     >
                 </div>
                 <div class="flex gap-2">
-                    {#if pdfUrl}
-                        <Button variant="outline" href={pdfUrl} target="_blank">
+                    {#if property && property.rootCauses && property.rootCauses.length > 0}
+                        <Button
+                            variant="outline"
+                            onclick={async () => {
+                                await import(
+                                    "$lib/services/reportService"
+                                ).then((m) =>
+                                    m.downloadReport(
+                                        property!.id,
+                                        "Buyer",
+                                        "en",
+                                        {
+                                            rootCauses: property!.rootCauses,
+                                            futureEvents:
+                                                property!.futureEvents,
+                                        },
+                                    ),
+                                );
+                            }}
+                        >
                             <FileText class="w-4 h-4 mr-2" />
-                            Download Report
+                            Generate Report
                         </Button>
                     {/if}
                     <Button onclick={runAnalysis} disabled={analyzing}>

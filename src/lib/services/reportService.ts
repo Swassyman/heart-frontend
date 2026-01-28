@@ -1,10 +1,15 @@
 
-export async function downloadReport(propertyId: string, role: 'Buyer' | 'Builder' | 'Inspector', lang: 'en' | 'ml' = 'en') {
+export async function downloadReport(
+    propertyId: string,
+    role: 'Buyer' | 'Builder' | 'Inspector',
+    lang: 'en' | 'ml' = 'en',
+    aiAnalysis?: any
+) {
     try {
         const res = await fetch('http://localhost:3000/report/generate-pdf', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ propertyId, role, lang })
+            body: JSON.stringify({ propertyId, role, lang, aiAnalysis })
         });
 
         if (!res.ok) {
