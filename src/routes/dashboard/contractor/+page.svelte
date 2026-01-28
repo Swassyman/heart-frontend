@@ -18,14 +18,13 @@
         if (user && user.id) {
             try {
                 const res = await fetch(
-                    `http://localhost:3000/user/${user.id}/properties`,
+                    `http://localhost:3000/property/owner/${user.id}`,
                 );
                 if (res.ok) {
                     const data = await res.json();
                     properties = data.map((p: any) => ({
                         id: p.PROPERTY_ID || p.property_id,
                         address: p.ADDRESS || p.address,
-                        owner: p.OWNER_NAME || "Unknown",
                         ownerId: p.USER_ID || p.user_id,
                         riskScore: p.RISK_SCORE
                             ? Math.round(p.RISK_SCORE * 100)
@@ -44,6 +43,32 @@
                             plumbing: "Standard",
                         },
                     }));
+
+                    // Fetch risk scores for all properties in parallel (same as owner page)
+                    await Promise.all(
+                        properties.map(async (property, index) => {
+                            try {
+                                const riskRes = await fetch(
+                                    `http://localhost:3000/property/${property.id}/risk-score`,
+                                );
+                                if (riskRes.ok) {
+                                    const riskData = await riskRes.json();
+                                    const score =
+                                        riskData.PROPERTY_RISK_SCORE ??
+                                        riskData.property_risk_score;
+                                    if (score !== undefined) {
+                                        properties[index].riskScore =
+                                            Math.round(score * 100);
+                                    }
+                                }
+                            } catch (e) {
+                                console.warn(
+                                    `Could not fetch risk score for property ${property.id}`,
+                                    e,
+                                );
+                            }
+                        }),
+                    );
                 } else {
                     console.error(
                         "Failed to fetch properties:",

@@ -9,12 +9,23 @@
     import { Plus, Trash2, Camera, FileText } from "lucide-svelte";
     import { Badge } from "$lib/components/ui/badge";
     import { downloadReport } from "$lib/services/reportService";
+    import { authStore } from "$lib/stores/auth";
+    import { get } from "svelte/store";
 
     let properties: Property[] = $state([]);
     let selectedPropertyId = $state<string>("");
     let summary = $state("");
     let isSubmitting = $state(false);
     let pdfLoading = $state(false);
+
+    // Recent inspections for sidebar
+    interface RecentInspection {
+        id: string;
+        propertyId: string;
+        date: string;
+        findingsCount: number;
+    }
+    let recentInspections = $state<RecentInspection[]>([]);
 
     // Finding Model
     interface Finding {
@@ -35,12 +46,22 @@
 
     onMount(async () => {
         try {
+            console.log("Inspector: Fetching all properties...");
             const res = await fetch("http://localhost:3000/property");
+            console.log("Inspector: Response status:", res.status);
             if (res.ok) {
                 const data = await res.json();
+                console.log("Inspector: Received data:", data);
+                console.log(
+                    "Inspector: First row keys:",
+                    data.length > 0 ? Object.keys(data[0]) : "no data",
+                );
                 properties = data.map((p: any) => ({
                     id: p.PROPERTY_ID || p.property_id,
-                    address: p.ADDRESS || p.address,
+                    address:
+                        p.ADDRESS ||
+                        p.address ||
+                        `${p.REGION || "Unknown"} - ${p.BUILDING_TYPE || "Property"} (${p.PROPERTY_ID})`,
                     owner: p.OWNER_NAME || "Unknown",
                     ownerId: p.USER_ID || p.user_id,
                     riskScore: p.RISK_SCORE
@@ -53,6 +74,12 @@
                         p.description ||
                         "No description available",
                 }));
+                console.log("Inspector: Mapped properties:", properties);
+            } else {
+                console.error(
+                    "Inspector: Failed to fetch properties:",
+                    await res.text(),
+                );
             }
         } catch (err) {
             console.error("Error fetching properties for inspector:", err);
@@ -88,21 +115,66 @@
         if (!selectedPropertyId) return;
         isSubmitting = true;
 
-        // Mock Submission
-        console.log("Submitting Inspection:", {
-            propertyId: selectedPropertyId,
-            summary,
-            findings,
-        });
+        try {
+            // Get inspector name from auth store
+            const user = get(authStore);
+            const inspectorName = user?.name || "Inspector";
 
-        await new Promise((r) => setTimeout(r, 1000)); // Fake network delay
+            // Transform findings to backend format
+            const formattedFindings = findings.map((f) => ({
+                room_id: f.room,
+                observation_text: f.description,
+                defect_type: "GENERAL", // Could be enhanced with AI detection
+                severity: f.severity,
+                observation_zone: "GENERAL",
+                confidence: 0.8,
+                image_ref: null,
+            }));
 
-        isSubmitting = false;
-        alert("Inspection submitted successfully!");
+            const response = await fetch(
+                "http://localhost:3000/inspection/submit",
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        property_id: selectedPropertyId,
+                        inspection_date: new Date().toISOString().split("T")[0],
+                        inspector_name: inspectorName,
+                        findings: formattedFindings,
+                    }),
+                },
+            );
 
-        // Reset Form
-        summary = "";
-        findings = [];
+            if (response.ok) {
+                const result = await response.json();
+                alert(
+                    `Inspection submitted successfully! ID: ${result.inspection_id}`,
+                );
+
+                // Add to recent inspections
+                recentInspections = [
+                    {
+                        id: result.inspection_id,
+                        propertyId: selectedPropertyId,
+                        date: new Date().toLocaleDateString(),
+                        findingsCount: findings.length,
+                    },
+                    ...recentInspections.slice(0, 4), // Keep last 5
+                ];
+
+                // Reset Form
+                summary = "";
+                findings = [];
+            } else {
+                const error = await response.json();
+                alert(`Submission failed: ${error.error}`);
+            }
+        } catch (err) {
+            console.error("Submission error:", err);
+            alert("Failed to submit inspection. Check console for details.");
+        } finally {
+            isSubmitting = false;
+        }
     }
 
     function getSeverityColor(sev: string) {
@@ -382,6 +454,39 @@
 
             <Card.Root>
                 <Card.Header>
+                    <Card.Title class="text-lg">Recent Inspections</Card.Title>
+                </Card.Header>
+                <Card.Content class="space-y-3">
+                    {#if recentInspections.length > 0}
+                        {#each recentInspections as inspection}
+                            <div
+                                class="flex justify-between items-center text-sm p-2 rounded bg-muted/30"
+                            >
+                                <div>
+                                    <p class="font-medium">
+                                        {inspection.propertyId}
+                                    </p>
+                                    <p class="text-xs text-muted-foreground">
+                                        {inspection.date}
+                                    </p>
+                                </div>
+                                <Badge variant="outline"
+                                    >{inspection.findingsCount} findings</Badge
+                                >
+                            </div>
+                        {/each}
+                    {:else}
+                        <p
+                            class="text-sm text-muted-foreground text-center py-2"
+                        >
+                            No recent inspections
+                        </p>
+                    {/if}
+                </Card.Content>
+            </Card.Root>
+
+            <Card.Root>
+                <Card.Header>
                     <Card.Title class="text-lg">Stats</Card.Title>
                 </Card.Header>
                 <Card.Content class="space-y-4">
@@ -389,13 +494,23 @@
                         <span class="text-muted-foreground"
                             >Inspections Today</span
                         >
-                        <span class="font-medium">0</span>
+                        <span class="font-medium"
+                            >{recentInspections.filter(
+                                (i) =>
+                                    i.date === new Date().toLocaleDateString(),
+                            ).length}</span
+                        >
                     </div>
                     <div class="flex justify-between text-sm">
                         <span class="text-muted-foreground"
-                            >Pending Reports</span
+                            >Total Findings (Session)</span
                         >
-                        <span class="font-medium">0</span>
+                        <span class="font-medium"
+                            >{recentInspections.reduce(
+                                (acc, i) => acc + i.findingsCount,
+                                0,
+                            )}</span
+                        >
                     </div>
                 </Card.Content>
             </Card.Root>
