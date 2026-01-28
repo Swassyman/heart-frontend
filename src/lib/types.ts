@@ -19,11 +19,13 @@ export interface InspectionFinding {
 }
 
 export interface RootCause {
-    roomId: string;
+    roomId: string; // The affected systems string
     defectType: string;
     rootCause: string;
     confidence: number;
-    supportingSignals: number; // Count of signals
+    supportingSignals: string; // Changed to string to match usage
+    reasoning?: string; // Added field
+    recommendations?: string[]; // Added field
 }
 
 export interface FutureEvent {
@@ -31,6 +33,8 @@ export interface FutureEvent {
     severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
     roomId: string;
     probability?: string; // e.g., "High", "Likely"
+    timeframe?: string; // Added field
+    preventiveMeasures?: string[]; // Added field
 }
 
 export interface Alert {

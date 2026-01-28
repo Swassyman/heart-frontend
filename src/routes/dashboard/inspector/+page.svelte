@@ -42,7 +42,7 @@
                     id: p.PROPERTY_ID || p.property_id,
                     address: p.ADDRESS || p.address,
                     owner: p.OWNER_NAME || "Unknown",
-                    ownerId: p.OWNER_ID || p.owner_id,
+                    ownerId: p.USER_ID || p.user_id,
                     riskScore: p.RISK_SCORE
                         ? Math.round(p.RISK_SCORE * 100)
                         : 0,

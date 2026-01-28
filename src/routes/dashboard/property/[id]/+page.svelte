@@ -10,10 +10,83 @@
         AlertTriangle,
         AlertOctagon,
         Info,
+        FileText,
+        Sparkles,
     } from "lucide-svelte";
+    import { Button } from "$lib/components/ui/button";
 
     let property: Property | null = $state(null);
     let loading = $state(true);
+    let analyzing = $state(false);
+    let pdfUrl: string | null = $state(null);
+
+    async function runAnalysis() {
+        if (!property) return;
+        analyzing = true;
+        try {
+            const res = await fetch(
+                `http://localhost:3000/property/${property.id}/analyze`,
+                {
+                    method: "POST",
+                },
+            );
+
+            if (res.ok) {
+                const data = await res.json();
+
+                // Update PDF URL
+                if (data.pdf_report) {
+                    pdfUrl = `http://localhost:3000${data.pdf_report}`;
+                }
+
+                // Update Root Causes
+                if (data.analysis && data.analysis.rootCauses) {
+                    property.rootCauses = data.analysis.rootCauses.map(
+                        (rc: any) => ({
+                            rootCause: rc.cause,
+                            defectType: "AI Identified",
+                            roomId: rc.affectedSystems.join(", "),
+                            confidence:
+                                rc.confidence === "high"
+                                    ? 0.9
+                                    : rc.confidence === "medium"
+                                      ? 0.6
+                                      : 0.3,
+                            supportingSignals: "AI Analysis",
+                            reasoning: rc.reasoning,
+                        }),
+                    );
+                }
+
+                // Update Future Predictions
+                if (
+                    data.future_predictions &&
+                    data.future_predictions.predictions
+                ) {
+                    property.futureEvents =
+                        data.future_predictions.predictions.map((fp: any) => ({
+                            eventName: fp.defectType,
+                            probability: fp.likelihood,
+                            severity:
+                                fp.likelihood === "high"
+                                    ? "HIGH"
+                                    : fp.likelihood === "medium"
+                                      ? "MEDIUM"
+                                      : "LOW",
+                            roomId: fp.relatedRootCause || "General",
+                            timeframe: fp.timeframe,
+                            preventiveMeasures: fp.preventiveMeasures,
+                        }));
+                }
+            } else {
+                console.error("Analysis failed");
+            }
+        } catch (e) {
+            console.error("Error running analysis", e);
+        } finally {
+            analyzing = false;
+        }
+    }
 
     onMount(async () => {
         const id = $page.params.id;
@@ -31,8 +104,8 @@
                         id: p.PROPERTY_ID || p.property_id,
                         address: p.ADDRESS || p.address,
                         owner: p.OWNER_NAME || "Unknown",
-                        ownerId: p.OWNER_ID || p.owner_id,
-                        riskScore: p.RISK_SCORE
+                        ownerId: p.USER_ID || p.user_id,
+                        riskScore: p.PROPERTY_RISK_SCORE
                             ? Math.round(p.RISK_SCORE * 100)
                             : 0,
                         imageUrl:
@@ -207,16 +280,35 @@
                     Owner: {property.owner}
                 </p>
             </div>
-            <div class="flex flex-col items-end">
-                <span
-                    class="text-sm font-medium text-muted-foreground uppercase tracking-wider"
-                    >Overall Risk Score</span
-                >
-                <span
-                    class="text-4xl font-bold {getRiskColor(
-                        property.riskScore,
-                    )}">{property.riskScore}%</span
-                >
+            <div class="flex flex-col items-end gap-2">
+                <div class="flex flex-col items-end">
+                    <span
+                        class="text-sm font-medium text-muted-foreground uppercase tracking-wider"
+                        >Overall Risk Score</span
+                    >
+                    <span
+                        class="text-4xl font-bold {getRiskColor(
+                            property.riskScore,
+                        )}">{property.riskScore}%</span
+                    >
+                </div>
+                <div class="flex gap-2">
+                    {#if pdfUrl}
+                        <Button variant="outline" href={pdfUrl} target="_blank">
+                            <FileText class="w-4 h-4 mr-2" />
+                            Download Report
+                        </Button>
+                    {/if}
+                    <Button onclick={runAnalysis} disabled={analyzing}>
+                        {#if analyzing}
+                            <Sparkles class="w-4 h-4 mr-2 animate-spin" />
+                            Analyzing...
+                        {:else}
+                            <Sparkles class="w-4 h-4 mr-2" />
+                            Run AI Analysis
+                        {/if}
+                    </Button>
+                </div>
             </div>
         </div>
 
@@ -436,6 +528,22 @@
                                             </div>
                                         </div>
                                     </div>
+                                    {#if cause.reasoning}
+                                        <div
+                                            class="mt-4 pt-4 border-t border-border/50"
+                                        >
+                                            <p
+                                                class="text-sm font-semibold mb-1"
+                                            >
+                                                Reasoning:
+                                            </p>
+                                            <p
+                                                class="text-sm text-muted-foreground"
+                                            >
+                                                {cause.reasoning}
+                                            </p>
+                                        </div>
+                                    {/if}
                                 </Card.Content>
                             </Card.Root>
                         {/each}
@@ -491,6 +599,35 @@
                                         >Risk detected in {event.roomId}</Card.Description
                                     >
                                 </Card.Header>
+                                <Card.Content>
+                                    {#if event.timeframe}
+                                        <div class="mb-2">
+                                            <span
+                                                class="text-xs font-semibold text-muted-foreground uppercase"
+                                                >Expected Timeframe:</span
+                                            >
+                                            <span
+                                                class="text-sm ml-1 text-foreground"
+                                                >{event.timeframe}</span
+                                            >
+                                        </div>
+                                    {/if}
+                                    {#if event.preventiveMeasures && event.preventiveMeasures.length > 0}
+                                        <div>
+                                            <span
+                                                class="text-xs font-semibold text-muted-foreground uppercase block mb-1"
+                                                >Preventive Measures:</span
+                                            >
+                                            <ul
+                                                class="list-disc list-inside text-sm text-muted-foreground space-y-1"
+                                            >
+                                                {#each event.preventiveMeasures as measure}
+                                                    <li>{measure}</li>
+                                                {/each}
+                                            </ul>
+                                        </div>
+                                    {/if}
+                                </Card.Content>
                             </Card.Root>
                         {/each}
                     </div>
