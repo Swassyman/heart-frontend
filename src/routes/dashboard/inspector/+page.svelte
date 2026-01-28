@@ -1,19 +1,20 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { MockService } from "$lib/services/mockData";
     import type { Property } from "$lib/types";
     import * as Card from "$lib/components/ui/card";
     import Button from "$lib/components/ui/button/button.svelte";
     import { Input } from "$lib/components/ui/input";
     import { Label } from "$lib/components/ui/label";
     import { Textarea } from "$lib/components/ui/textarea";
-    import { Plus, Trash2, Camera } from "lucide-svelte";
+    import { Plus, Trash2, Camera, FileText } from "lucide-svelte";
     import { Badge } from "$lib/components/ui/badge";
+    import { downloadReport } from "$lib/services/reportService";
 
     let properties: Property[] = $state([]);
     let selectedPropertyId = $state<string>("");
     let summary = $state("");
     let isSubmitting = $state(false);
+    let pdfLoading = $state(false);
 
     // Finding Model
     interface Finding {
@@ -33,7 +34,30 @@
     );
 
     onMount(async () => {
-        properties = await MockService.getProperties("INSPECTOR");
+        try {
+            const res = await fetch("http://localhost:3000/property");
+            if (res.ok) {
+                const data = await res.json();
+                properties = data.map((p: any) => ({
+                    id: p.PROPERTY_ID || p.property_id,
+                    address: p.ADDRESS || p.address,
+                    owner: p.OWNER_NAME || "Unknown",
+                    ownerId: p.OWNER_ID || p.owner_id,
+                    riskScore: p.RISK_SCORE
+                        ? Math.round(p.RISK_SCORE * 100)
+                        : 0,
+                    imageUrl:
+                        "https://images.unsplash.com/photo-1568605114967-8130f3a36994?auto=format&fit=crop&w=800&q=80",
+                    description:
+                        p.DESCRIPTION ||
+                        p.description ||
+                        "No description available",
+                }));
+            }
+        } catch (err) {
+            console.error("Error fetching properties for inspector:", err);
+        }
+
         if (properties.length > 0) selectedPropertyId = properties[0].id;
     });
 
@@ -251,11 +275,107 @@
                     <Card.Title>Quick Actions</Card.Title>
                 </Card.Header>
                 <Card.Content class="space-y-2">
+                    <input
+                        type="file"
+                        accept="image/*"
+                        id="photo-upload"
+                        class="hidden"
+                        onchange={async (e) => {
+                            const file = e.currentTarget.files?.[0];
+                            if (!file || !selectedPropertyId) return;
+
+                            const reader = new FileReader();
+                            reader.onload = async () => {
+                                const base64 = reader.result as string;
+                                try {
+                                    // Show loading state (could improve this UI later)
+                                    alert("Analyzing image... please wait.");
+
+                                    const res = await fetch(
+                                        "http://localhost:3000/vision/analyze-image",
+                                        {
+                                            method: "POST",
+                                            headers: {
+                                                "Content-Type":
+                                                    "application/json",
+                                            },
+                                            body: JSON.stringify({
+                                                inspectionId: "temp-pending", // We don't have an ID yet
+                                                roomId: "General", // Default for now
+                                                image: base64,
+                                            }),
+                                        },
+                                    );
+
+                                    if (res.ok) {
+                                        const data = await res.json();
+                                        // The backend returns { status: "ok", defects_detected: N }
+                                        // But wait, the backend currently inserts into DB directly and returns a summary.
+                                        // The user wants to SEE the results in the form.
+                                        // We might need to adjust the backend to return the defects data too?
+                                        // But checking the previous code, the backend returns:
+                                        // { status: "ok", defects_detected: defects.length }
+
+                                        // Ah, the user said "use /analyze-images".
+                                        // If the backend currently SAVES them to DB, they won't show up here unless we fetch them back?
+                                        // Or we should modify the backend to RETURN the defects so we can add them to the UI list?
+
+                                        // Add detected findings to the list
+                                        if (
+                                            data.defects &&
+                                            data.defects.length > 0
+                                        ) {
+                                            const newFindings =
+                                                data.defects.map((d: any) => ({
+                                                    id: crypto.randomUUID(),
+                                                    room: "AI Detected",
+                                                    description: d.description,
+                                                    severity:
+                                                        d.severity.toUpperCase(),
+                                                }));
+
+                                            findings = [
+                                                ...findings,
+                                                ...newFindings,
+                                            ];
+                                            alert(
+                                                `AI found ${data.defects.length} defects! They have been added to the list.`,
+                                            );
+                                        } else {
+                                            alert(
+                                                "AI completed analysis but found no defects.",
+                                            );
+                                        }
+                                    } else {
+                                        alert(
+                                            "Analysis failed: " +
+                                                (await res.text()),
+                                        );
+                                    }
+                                } catch (err) {
+                                    console.error(err);
+                                    alert("Error analyzing image");
+                                }
+                            };
+                            reader.readAsDataURL(file);
+                        }}
+                    />
                     <Button
                         variant="outline"
                         class="w-full justify-start gap-2"
+                        onclick={() =>
+                            document.getElementById("photo-upload")?.click()}
                     >
                         <Camera class="w-4 h-4" /> Upload Photos
+                    </Button>
+                    <Button
+                        variant="outline"
+                        class="w-full justify-start gap-2"
+                        disabled={!selectedPropertyId}
+                        onclick={() =>
+                            downloadReport(selectedPropertyId, "Inspector")}
+                    >
+                        <FileText class="w-4 h-4" /> Generate Report
                     </Button>
                 </Card.Content>
             </Card.Root>

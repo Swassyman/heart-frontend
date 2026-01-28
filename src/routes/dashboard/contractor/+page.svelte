@@ -1,15 +1,17 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { goto } from "$app/navigation";
-    import { MockService } from "$lib/services/mockData";
     import type { Property } from "$lib/types";
     import * as Card from "$lib/components/ui/card";
     import * as Table from "$lib/components/ui/table";
     import { Badge } from "$lib/components/ui/badge";
     import { authStore } from "$lib/stores/auth";
     import { get } from "svelte/store";
+    import { downloadReport } from "$lib/services/reportService";
+    import Button from "$lib/components/ui/button/button.svelte";
 
     let properties: Property[] = $state([]);
+    let generatingPdfId = $state<string | null>(null);
 
     onMount(async () => {
         const user = get(authStore);
@@ -47,14 +49,10 @@
                         "Failed to fetch properties:",
                         await res.text(),
                     );
-                    properties = await MockService.getProperties("BUILDER");
                 }
             } catch (err) {
                 console.error("Error fetching properties:", err);
-                properties = await MockService.getProperties("BUILDER");
             }
-        } else {
-            properties = await MockService.getProperties("BUILDER");
         }
     });
 
@@ -98,11 +96,15 @@
                     >
                     <Table.Head
                         class="h-14 uppercase text-xs tracking-wider font-semibold text-muted-foreground"
-                        >Owner</Table.Head
+                        >Contractor</Table.Head
                     >
                     <Table.Head
                         class="h-14 uppercase text-xs tracking-wider font-semibold text-muted-foreground"
                         >Risk Score</Table.Head
+                    >
+                    <Table.Head
+                        class="h-14 uppercase text-xs tracking-wider font-semibold text-muted-foreground"
+                        >Report</Table.Head
                     >
                     <Table.Head
                         class="h-14 uppercase text-xs tracking-wider font-semibold text-muted-foreground"
@@ -140,6 +142,18 @@
                             >
                                 {property.riskScore}%
                             </Badge>
+                        </Table.Cell>
+                        <Table.Cell>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onclick={(e) => {
+                                    e.stopPropagation();
+                                    downloadReport(property.id, "Builder");
+                                }}
+                            >
+                                Generate PDF
+                            </Button>
                         </Table.Cell>
                         <Table.Cell>
                             {#if property.technicalDetails}

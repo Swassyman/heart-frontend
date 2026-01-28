@@ -1,6 +1,5 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { MockService } from "$lib/services/mockData";
     import type { Property } from "$lib/types";
     import * as Card from "$lib/components/ui/card";
     import Button from "$lib/components/ui/button/button.svelte";
@@ -8,15 +7,17 @@
     import { goto } from "$app/navigation";
     import { authStore } from "$lib/stores/auth";
     import { get } from "svelte/store";
+    import { downloadReport } from "$lib/services/reportService";
 
     let properties: Property[] = $state([]);
+    let pdfLoading = $state(false);
 
     onMount(async () => {
         const user = get(authStore);
         if (user && user.id) {
             try {
                 const res = await fetch(
-                    `http://localhost:3000/user/${user.id}/properties`,
+                    `http://localhost:3000/property/owner/${user.id}`,
                 );
                 if (res.ok) {
                     const data = await res.json();
@@ -24,7 +25,7 @@
                     properties = data.map((p: any) => ({
                         id: p.PROPERTY_ID || p.property_id,
                         address: p.ADDRESS || p.address,
-                        owner: p.OWNER_NAME || "Unknown", // Assuming backend might not join Owner Name, or we use defaults
+                        owner: p.OWNER_NAME || "Unknown",
                         ownerId: p.OWNER_ID || p.owner_id,
                         riskScore: p.RISK_SCORE
                             ? Math.round(p.RISK_SCORE * 100)
@@ -35,23 +36,43 @@
                             p.DESCRIPTION ||
                             p.description ||
                             "No description available",
-                        // ... other fields if available
                     }));
                 } else {
                     console.error(
                         "Failed to fetch properties:",
                         await res.text(),
                     );
-                    // Fallback to mock for demo if API fails/empty
-                    properties = await MockService.getProperties("BUYER");
                 }
+
+                // Fetch risk scores for all properties in parallel
+                await Promise.all(
+                    properties.map(async (property, index) => {
+                        try {
+                            const riskRes = await fetch(
+                                `http://localhost:3000/property/${property.id}/risk-score`,
+                            );
+                            if (riskRes.ok) {
+                                const riskData = await riskRes.json();
+                                const score =
+                                    riskData.PROPERTY_RISK_SCORE ??
+                                    riskData.property_risk_score;
+                                if (score !== undefined) {
+                                    properties[index].riskScore = Math.round(
+                                        score * 100,
+                                    );
+                                }
+                            }
+                        } catch (e) {
+                            console.warn(
+                                `Could not fetch risk score for property ${property.id}`,
+                                e,
+                            );
+                        }
+                    }),
+                );
             } catch (err) {
                 console.error("Error fetching properties:", err);
-                // Fallback
-                properties = await MockService.getProperties("BUYER");
             }
-        } else {
-            properties = await MockService.getProperties("BUYER");
         }
     });
 
@@ -110,18 +131,36 @@
                     </div>
                 </Card.Content>
                 <Card.Footer>
-                    <Button
-                        class="w-full"
-                        variant="secondary"
-                        onclick={(e) => {
-                            e.stopPropagation();
-                            alert(
-                                `Downloading report for ${property.address}...`,
-                            );
-                        }}
-                    >
-                        Download Risk Report
-                    </Button>
+                    <div class="flex gap-2 w-full">
+                        <Button
+                            class="flex-1"
+                            variant="secondary"
+                            onclick={async (e) => {
+                                e.stopPropagation();
+                                await downloadReport(
+                                    property.id,
+                                    "Buyer",
+                                    "en",
+                                );
+                            }}
+                        >
+                            Report (En)
+                        </Button>
+                        <Button
+                            class="flex-1"
+                            variant="outline"
+                            onclick={async (e) => {
+                                e.stopPropagation();
+                                await downloadReport(
+                                    property.id,
+                                    "Buyer",
+                                    "ml",
+                                );
+                            }}
+                        >
+                            Report (Ml)
+                        </Button>
+                    </div>
                 </Card.Footer>
             </Card.Root>
         {/each}

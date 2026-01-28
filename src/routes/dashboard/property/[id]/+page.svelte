@@ -1,7 +1,6 @@
 <script lang="ts">
     import { page } from "$app/stores";
     import { onMount } from "svelte";
-    import { MockService } from "$lib/services/mockData";
     import type { Property } from "$lib/types";
     import * as Card from "$lib/components/ui/card";
     import { Badge } from "$lib/components/ui/badge";
@@ -19,15 +18,54 @@
     onMount(async () => {
         const id = $page.params.id;
         if (id) {
-            // Fetch base mock data (until other endpoints are ready)
-            const mockProp = await MockService.getPropertyById(id);
-            if (!mockProp) {
-                // If mock fails, we can't do much (or we could fetch from backend property details if it existed)
-                // For now, assume mockProp is the base
+            try {
+                // 1. Fetch Property Details (Real API)
+                const propRes = await fetch(
+                    `http://localhost:3000/property/${id}`,
+                );
+
+                if (propRes.ok) {
+                    const p = await propRes.json();
+
+                    const newProperty: Property = {
+                        id: p.PROPERTY_ID || p.property_id,
+                        address: p.ADDRESS || p.address,
+                        owner: p.OWNER_NAME || "Unknown",
+                        ownerId: p.OWNER_ID || p.owner_id,
+                        riskScore: p.RISK_SCORE
+                            ? Math.round(p.RISK_SCORE * 100)
+                            : 0,
+                        imageUrl:
+                            "https://images.unsplash.com/photo-1568605114967-8130f3a36994?auto=format&fit=crop&w=800&q=80",
+                        description:
+                            p.DESCRIPTION ||
+                            p.description ||
+                            "No description available",
+                        technicalDetails: {
+                            roof: "Standard",
+                            foundation: "Standard",
+                            electrical: "Standard",
+                            plumbing: "Standard",
+                        },
+                        findings: [],
+                        alerts: [],
+                        // Initialize other arrays primarily
+                        rootCauses: [],
+                        futureEvents: [],
+                    };
+
+                    property = newProperty;
+                } else {
+                    console.error("Failed to fetch property details");
+                    loading = false;
+                    return;
+                }
+            } catch (err) {
+                console.error("Error fetching generic details:", err);
+                loading = false;
                 return;
             }
 
-            // 1. Fetch real defects from API
             try {
                 const res = await fetch(
                     `http://localhost:3000/property/${id}/defects`,
@@ -36,15 +74,17 @@
                     const defects = await res.json();
 
                     // Map Snowflake uppercase keys to our frontend model
-                    mockProp.findings = defects.map((d: any) => ({
-                        id: d.FINDING_ID || d.finding_id,
-                        defectType: d.DEFECT_TYPE || d.defect_type,
-                        severity: d.SEVERITY || d.severity,
-                        roomId: d.OBSERVATION_ZONE || d.observation_zone,
-                        confidence: d.CONFIDENCE || d.confidence,
-                        observationText:
-                            d.OBSERVATION_TEXT || d.observation_text,
-                    }));
+                    if (property) {
+                        property.findings = defects.map((d: any) => ({
+                            id: d.FINDING_ID || d.finding_id,
+                            defectType: d.DEFECT_TYPE || d.defect_type,
+                            severity: d.SEVERITY || d.severity,
+                            roomId: d.OBSERVATION_ZONE || d.observation_zone,
+                            confidence: d.CONFIDENCE || d.confidence,
+                            observationText:
+                                d.OBSERVATION_TEXT || d.observation_text,
+                        }));
+                    }
                 } else {
                     console.error("Failed to fetch defects:", await res.text());
                 }
@@ -61,9 +101,10 @@
                     const riskData = await res.json();
                     if (riskData) {
                         const score =
-                            riskData.RISK_SCORE ?? riskData.risk_score;
-                        if (score !== undefined) {
-                            mockProp.riskScore = Math.round(score * 100);
+                            riskData.PROPERTY_RISK_SCORE ??
+                            riskData.property_risk_score;
+                        if (score !== undefined && property) {
+                            property.riskScore = Math.round(score * 100);
                         }
                     }
                 }
@@ -72,10 +113,10 @@
             }
 
             // 3. Fetch Room Alerts
-            if (mockProp.findings && mockProp.findings.length > 0) {
+            if (property && property.findings && property.findings.length > 0) {
                 const uniqueRooms = [
                     ...new Set(
-                        mockProp.findings.map((f) => f.roomId).filter(Boolean),
+                        property.findings.map((f) => f.roomId).filter(Boolean),
                     ),
                 ];
                 const allAlerts = [];
@@ -108,11 +149,9 @@
                 }
 
                 if (allAlerts.length > 0) {
-                    mockProp.alerts = allAlerts;
+                    property.alerts = allAlerts;
                 }
             }
-
-            property = mockProp;
         }
         loading = false;
     });
