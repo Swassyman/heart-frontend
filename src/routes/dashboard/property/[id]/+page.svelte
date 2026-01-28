@@ -364,60 +364,6 @@
                     </p>
                 </Card.Content>
             </Card.Root>
-
-            <Card.Root class="shadow-sm">
-                <Card.Header>
-                    <Card.Title>Technical Specs</Card.Title>
-                </Card.Header>
-                <Card.Content>
-                    {#if property.technicalDetails}
-                        <dl class="space-y-3 text-sm">
-                            <div
-                                class="flex justify-between border-b pb-2 border-border/50"
-                            >
-                                <dt class="text-muted-foreground">
-                                    Foundation
-                                </dt>
-                                <dd
-                                    class="font-medium text-right text-foreground max-w-[150px] truncate"
-                                >
-                                    {property.technicalDetails.foundation}
-                                </dd>
-                            </div>
-                            <div
-                                class="flex justify-between border-b pb-2 border-border/50"
-                            >
-                                <dt class="text-muted-foreground">Roof</dt>
-                                <dd
-                                    class="font-medium text-right text-foreground max-w-[150px] truncate"
-                                >
-                                    {property.technicalDetails.roof}
-                                </dd>
-                            </div>
-                            <div
-                                class="flex justify-between border-b pb-2 border-border/50"
-                            >
-                                <dt class="text-muted-foreground">
-                                    Electrical
-                                </dt>
-                                <dd
-                                    class="font-medium text-right text-foreground max-w-[150px] truncate"
-                                >
-                                    {property.technicalDetails.electrical}
-                                </dd>
-                            </div>
-                            <div class="flex justify-between pt-1">
-                                <dt class="text-muted-foreground">Plumbing</dt>
-                                <dd
-                                    class="font-medium text-right text-foreground max-w-[150px] truncate"
-                                >
-                                    {property.technicalDetails.plumbing}
-                                </dd>
-                            </div>
-                        </dl>
-                    {/if}
-                </Card.Content>
-            </Card.Root>
         </div>
 
         <!-- Main Data Tabs -->

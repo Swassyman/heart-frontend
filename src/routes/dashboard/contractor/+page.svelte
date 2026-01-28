@@ -131,10 +131,6 @@
                         class="h-14 uppercase text-xs tracking-wider font-semibold text-muted-foreground"
                         >Report</Table.Head
                     >
-                    <Table.Head
-                        class="h-14 uppercase text-xs tracking-wider font-semibold text-muted-foreground"
-                        >Technical Summary</Table.Head
-                    >
                 </Table.Row>
             </Table.Header>
             <Table.Body>
@@ -179,43 +175,6 @@
                             >
                                 Generate PDF
                             </Button>
-                        </Table.Cell>
-                        <Table.Cell>
-                            {#if property.technicalDetails}
-                                <div
-                                    class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground"
-                                >
-                                    <div class="flex items-center gap-1.5">
-                                        <div
-                                            class="w-1 h-1 rounded-full bg-foreground/20"
-                                        ></div>
-                                        <span
-                                            >Roof: <span
-                                                class="text-foreground/70 font-medium"
-                                                >{property.technicalDetails
-                                                    .roof}</span
-                                            ></span
-                                        >
-                                    </div>
-                                    <div class="flex items-center gap-1.5">
-                                        <div
-                                            class="w-1 h-1 rounded-full bg-foreground/20"
-                                        ></div>
-                                        <span
-                                            >Fnd: <span
-                                                class="text-foreground/70 font-medium"
-                                                >{property.technicalDetails
-                                                    .foundation}</span
-                                            ></span
-                                        >
-                                    </div>
-                                </div>
-                            {:else}
-                                <span
-                                    class="text-muted-foreground/50 text-xs italic"
-                                    >No details available</span
-                                >
-                            {/if}
                         </Table.Cell>
                     </Table.Row>
                 {/each}
